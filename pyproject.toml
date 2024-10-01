@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py_ts_attrs"
+version = "1.0.0"
+authors = [
+    { name="Alex Rönin", email="alex@doridaweb.com" },
+]
+description = "Convert attr.s dataclasses to TypeScript types"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+license = {file = "LICENSE"}
+dependencies = [
+    "attrs>=20.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mufularoh/py_ts_attrs"
+Issues = "https://github.com/mufularoh/py_ts_attrs/issues"
+
