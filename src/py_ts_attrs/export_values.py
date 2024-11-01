@@ -1,7 +1,7 @@
-from typing import Type, TypeVar
+from typing import TypeVar
 
-T = TypeVar("T", bound=Type)
+T = TypeVar("T", bound=object)
 
 def export_values(cls: T) -> T:
-    cls._EXPORT_VALUES = True
+    setattr(cls, "_EXPORT_VALUES", True)
     return cls

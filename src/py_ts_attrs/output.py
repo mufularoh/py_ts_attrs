@@ -1,10 +1,9 @@
-import importlib
 import inspect
 import json
-import types
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional,  List, Dict, Set, Union, Callable, Tuple
+from typing import Optional,  List, Dict, Set, Union, Tuple, Type
+from types import ModuleType
 
 import attr
 
@@ -14,7 +13,6 @@ from .types import ProcessingResultV2,  PARSEABLE, DoNotExport,  UnionType
 from .exportable_enum import ExportableEnum
 from .base import ApiDataBase
 
-from .text_utils import CamelCaseHyphenation
 
 @attr.s
 class AppFolder:
@@ -23,17 +21,19 @@ class AppFolder:
 
 @attr.s
 class ModuleContents:
-    contents: List[Union[ApiProxy, ApiDataBase, ExportableEnum]] = attr.ib()
+    contents: List[Union[Type[ApiDataBase], Type[ExportableEnum], ExportableEnum, UnionType, ProcessingResultV2]] = attr.ib()
     also_process_module_keys: Set[str] = attr.ib()
     with_overrided_outputs: List[Tuple[List[PARSEABLE], Tuple[Path, str]]] = attr.ib()
+
 @attr.s(auto_attribs=True)
 class TypeScriptSettings:
     output_path: Path
     import_root: str
     default_folder: str
     installed_apps: List[str]
-    app_folders: List[AppFolder]
     write_output: bool
+    modules: List[ModuleType]
+
 
 class TypescriptFile:
     path: Path
@@ -283,36 +283,37 @@ def marked_not_export(cls: PARSEABLE):
     return inspect.isclass(cls) and issubclass(cls, DoNotExport)
 
 
-def api_setup(settings: TypeScriptSettings):
+def generate_types(settings: TypeScriptSettings):
     regenerate_types = True
     repository = ModulesRepository()
     
     
-    def get_module_contents(module_: object) -> ModuleContents:
-        ret: List[Union[ApiProxy, ApiDataBase, ExportableEnum]] = []
+    def get_module_contents(module_: ModuleType) -> ModuleContents:
+        ret: List[Union[Type[ApiDataBase], Type[ExportableEnum], ExportableEnum, UnionType, ProcessingResultV2]] = []
         also_process = getattr(module_, "ALSO_PROCESS", [])
         to_process = list(vars(module_).values())
         also_process_keys: Set[str] = set()
         with_overrided_outputs: List[Tuple[List[Union[PARSEABLE, UnionType, ProcessingResultV2]], Tuple[Path, str]]] = []
         for also in also_process:
             to_process += list(vars(also).values())
-        auto_discover: Optional[Callable[[],Tuple[List[Union[PARSEABLE, UnionType, ProcessingResultV2]], Optional[Tuple[Path, str]]]]] = getattr(module_, "AUTO_DISCOVER", None)
-        if auto_discover:
-            discovered, output_settings = auto_discover()
-            if not output_settings:
-                to_process += discovered
-            else:
-                with_overrided_outputs.append((discovered, output_settings))
+        # auto_discover: Optional[Callable[[],Tuple[List[Union[PARSEABLE, UnionType, ProcessingResultV2]], Optional[Tuple[Path, str]]]]] = getattr(module_, "AUTO_DISCOVER", None)
+        # if auto_discover:
+        #     discovered, output_settings = auto_discover()
+        #     if not output_settings:
+        #         to_process += discovered
+        #     else:
+        #         with_overrided_outputs.append((discovered, output_settings))
 
         for v in to_process:
             if (
                     (not marked_not_export(v)) and
                     (
-                            (inspect.isclass(v) and issubclass(v, ApiDataBase) and attr.has(v) and getattr(v, "__module__", "").startswith(child.name)) or
-                            (inspect.isclass(v) and issubclass(v, ExportableEnum) and getattr(v, "__module__", "").startswith(child.name)) or
+                            (inspect.isclass(v) and issubclass(v, ApiDataBase) and attr.has(v) and getattr(v, "__module__", "").startswith(module_.__name__)) or
+                            (inspect.isclass(v) and issubclass(v, ExportableEnum) and getattr(v, "__module__", "").startswith(module_.__name__)) or
                             (isinstance(v, ApiProxy))
                     )
             ):
+                print("ADDED")
                 if v.__module__ in [y.__name__ for y in also_process]:
                     also_process_keys.add(v.__module__)
                 ret.append(v)  # type: ignore
@@ -325,39 +326,26 @@ def api_setup(settings: TypeScriptSettings):
     
     also_process_module_keys: Set[str] = set()
     if regenerate_types:
-        for child in settings.app_folders:
-            if (child.path / "dto.py").exists():
-                module_contents = get_module_contents(importlib.import_module(f"{child.name}.dto"))
-                if module_contents:
-                    module = PrintableModule(settings, child.name.split(".")[-1], repository, f"{child.name.split('.')[0]}-")
-                    also_process_module_keys |= module_contents.also_process_module_keys
-                    for x in module_contents.contents:
-                        if isinstance(x, ApiProxy):
-                            module.add(x)
-                        else:
-                            module.add(x)
-                    for contents, overriden_outputs in module_contents.with_overrided_outputs:
-                        module = PrintableModule(overriden_outputs[1], repository, "", custom_path=overriden_outputs[0])
-                        for x in contents:
-                            module.add(x)
-    
-    for child in app_folders:
-        if (child.path / "api.py").exists():
-            module_contents = [
-                (k, v)
-                for k, v in vars(importlib.import_module(f"{child.name}.api")).items()
-                if isinstance(v, types.FunctionType) and getattr(v, "is_api_method", False) and getattr(v, "is_v2", False)
-            ]
+        for module in settings.modules:
+            module_contents = get_module_contents(module)
             if module_contents:
-                module_api = ApiModule(child.name.split(".")[-1], repository, f"{child.name.split('.')[0]}-")
-                for name, handler in module_contents:
-                    if regenerate_types:
-                        module_api.add(HandlerSignature.get(handler.original))
+                printable_module = PrintableModule(settings, printable_module.__name__, repository, f"{printable_module.__name__}-")
+                also_process_module_keys |= module_contents.also_process_module_keys
+                for x in module_contents.contents:
+                    if isinstance(x, ApiProxy):
+                        printable_module.add(x)
+                    else:
+                        printable_module.add(x)
+                for contents, overriden_outputs in module_contents.with_overrided_outputs:
+                    printable_module = PrintableModule(settings, overriden_outputs[1], repository, "", custom_path=overriden_outputs[0])
+                    for x in contents:
+                        printable_module.add(x)
     
-    if write_output:
-        for module in repository.modules.values():
-            module.set_also_process(also_process_module_keys)
-            module.digest()
-            module.get_ts().update()
+    
+    if settings.write_output:
+        for printable_module in repository.modules.values():
+            printable_module.set_also_process(also_process_module_keys)
+            printable_module.digest()
+            printable_module.get_ts().update()
             
     return repository

@@ -13,6 +13,7 @@ from .base import ApiDataBase
 class ApiDataTS:
     cls: PARSEABLE
     name: str
+    type_name: str
     module: str
     classes_tree: List[str]
     processors: Dict[str, Union[ApiDataField, str]]
@@ -32,6 +33,9 @@ class ApiDataTS:
                  installed_apps: List[str]
                  ):
         self.name = cls.__name__
+        self.type_name = self.name
+        if issubclass(cls, ApiDataBase):
+            self.type_name = cls.CUSTOM_TS_TYPE_NAME or self.name
         self.module = cls.__module__
         self.cls = cls
         self.get_proxy = get_proxy
@@ -177,7 +181,7 @@ class ApiDataTS:
         compound = getattr(self.cls, "COMPOUND", None)
         return [ProcessingResultV2(
             full_name=self.cls.__module__ + "." + self.cls.__name__,
-            type_name=self.name,
+            type_name=self.type_name,
             fields=fields,
             definition=definition,
             additional_types=[],

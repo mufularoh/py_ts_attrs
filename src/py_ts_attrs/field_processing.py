@@ -31,8 +31,8 @@ class ApiDataField:
     additionally_import: typing.Dict[str, typing.List[str]]
     optional: bool
 
-    @abc.abstractmethod
     @staticmethod
+    @abc.abstractmethod
     def check(field: types.FieldDefinition) -> bool: ...
 
     def __init__(self, field: types.FieldDefinition, classes_tree: typing.List[str]):

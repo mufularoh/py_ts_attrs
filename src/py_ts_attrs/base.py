@@ -1,4 +1,4 @@
-from typing import Dict, Callable, Any, List
+from typing import Dict, Callable, Any, List, Optional
 
 
 class ApiDataBase:
@@ -11,7 +11,7 @@ class ApiDataBase:
     STRICT_MODE: when True do not attempts to auto-fill missing values with empty
     FORCE_NONE: Forces None as value for non-existent fields while representing
     """
-    
+    CUSTOM_TS_TYPE_NAME: Optional[str] = None 
     CUSTOM_LOAD: Dict[str, Callable[[Any], Any]] = {}
     CUSTOM_IMPORTS: Dict[str, List[str]] = {}
     OMIT_IN_REPRESENTATION: List[str] = []
